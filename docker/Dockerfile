@@ -115,7 +115,7 @@ RUN apt-get -qq update \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
-ENV PATH=$PATH:/usr/lib/btbn-ffmpeg/bin
+ENV PATH="$PATH:/usr/lib/btbn-ffmpeg/bin"
 
 COPY --from=nginx /usr/local/nginx/ /usr/local/nginx/
 
@@ -139,8 +139,6 @@ RUN S6_ARCH="${TARGETARCH}" \
     && if [ "${TARGETARCH}" = "arm64" ]; then S6_ARCH="aarch64"; fi \
     && wget -O /tmp/s6-overlay-installer "https://github.com/just-containers/s6-overlay/releases/download/v2.2.0.3/s6-overlay-${S6_ARCH}-installer" \
     && chmod +x /tmp/s6-overlay-installer && /tmp/s6-overlay-installer /
-
-RUN export PATH=$PATH:/usr/lib/btbn-ffmpeg/bin
 
 EXPOSE 5000
 EXPOSE 1935
