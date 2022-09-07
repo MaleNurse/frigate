@@ -140,6 +140,8 @@ RUN S6_ARCH="${TARGETARCH}" \
     && wget -O /tmp/s6-overlay-installer "https://github.com/just-containers/s6-overlay/releases/download/v2.2.0.3/s6-overlay-${S6_ARCH}-installer" \
     && chmod +x /tmp/s6-overlay-installer && /tmp/s6-overlay-installer /
 
+RUN cp /usr/lib/btbn-ffmpeg/bin/* /usr/local/bin
+
 EXPOSE 5000
 EXPOSE 1935
 
