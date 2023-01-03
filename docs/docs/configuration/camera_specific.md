@@ -3,20 +3,26 @@ id: camera_specific
 title: Camera Specific Configurations
 ---
 
+:::note
+
+This page makes use of presets of FFmpeg args. For more information on presets, see the [FFmpeg Presets](/configuration/ffmpeg_presets) page.
+
+:::
+
 ## MJPEG Cameras
 
 The input and output parameters need to be adjusted for MJPEG cameras
 
 ```yaml
-input_args: -avoid_negative_ts make_zero -fflags nobuffer -flags low_delay -strict experimental -fflags +genpts+discardcorrupt -use_wallclock_as_timestamps 1
+input_args: preset-http-mjpeg-generic
 ```
 
 Note that mjpeg cameras require encoding the video into h264 for recording, and rtmp roles. This will use significantly more CPU than if the cameras supported h264 feeds directly.
 
 ```yaml
 output_args:
-  record: -f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c:v libx264 -an
-  rtmp: -c:v libx264 -an -f flv
+  record: preset-record-mjpeg
+  rtmp: preset-rtmp-mjpeg
 ```
 
 ## JPEG Stream Cameras
@@ -24,25 +30,7 @@ output_args:
 Cameras using a live changing jpeg image will need input parameters as below
 
 ```yaml
-input_args:
-- -r
-- 5 # << enter FPS here
-- -stream_loop
-- -1
-- -f
-- image2
-- -avoid_negative_ts
-- make_zero
-- -fflags
-- nobuffer
-- -flags
-- low_delay
-- -strict
-- experimental
-- -fflags
-- +genpts+discardcorrupt
-- -use_wallclock_as_timestamps
-- 1
+input_args: preset-http-jpeg-generic
 ```
 
 Outputting the stream will have the same args and caveats as per [MJPEG Cameras](#mjpeg-cameras)
@@ -53,7 +41,7 @@ The input parameters need to be adjusted for RTMP cameras
 
 ```yaml
 ffmpeg:
-  input_args: -avoid_negative_ts make_zero -fflags nobuffer -flags low_delay -strict experimental -fflags +genpts+discardcorrupt -rw_timeout 5000000 -use_wallclock_as_timestamps 1 -f live_flv
+  input_args: preset-rtmp-generic
 ```
 
 ## UDP Only Cameras
@@ -62,12 +50,13 @@ If your cameras do not support TCP connections for RTSP, you can use UDP.
 
 ```yaml
 ffmpeg:
-  input_args: -avoid_negative_ts make_zero -fflags +genpts+discardcorrupt -rtsp_transport udp -timeout 5000000 -use_wallclock_as_timestamps 1
+  input_args: preset-rtsp-udp
 ```
 
 ## Model/vendor specific setup
 
 ### Annke C800
+
 This camera is H.265 only. To be able to play clips on some devices (like MacOs or iPhone) the H.265 stream has to be repackaged and the audio stream has to be converted to aac. Unfortunately direct playback of in the browser is not working (yet), but the downloaded clip can be played locally.
 
 ```yaml
@@ -77,7 +66,7 @@ cameras:
       output_args:
         record: -f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c:v copy -tag:v hvc1 -bsf:v hevc_mp4toannexb -c:a aac
         rtmp: -c:v copy -c:a aac -f flv
-        
+
       inputs:
         - path: rtsp://user:password@camera-ip:554/H264/ch1/main/av_stream # <----- Update for your camera
           roles:
@@ -87,10 +76,8 @@ cameras:
     rtmp:
       enabled: False # <-- RTMP should be disabled if your stream is not H264
     detect:
-      width:  # <---- update for your camera's resolution
-      height:  # <---- update for your camera's resolution
-
-
+      width: # <---- update for your camera's resolution
+      height: # <---- update for your camera's resolution
 ```
 
 ### Blue Iris RTSP Cameras
@@ -99,12 +86,18 @@ You will need to remove `nobuffer` flag for Blue Iris RTSP cameras
 
 ```yaml
 ffmpeg:
-  input_args: -avoid_negative_ts make_zero -flags low_delay -strict experimental -fflags +genpts+discardcorrupt -rtsp_transport tcp -timeout 5000000 -use_wallclock_as_timestamps 1
+  input_args: preset-rtsp-blue-iris
 ```
 
-### Reolink 410/520 (possibly others)
+### Reolink Cameras
 
-![Resolutions](/img/reolink-settings.png)
+Reolink has older cameras (ex: 410 & 520) as well as newer camera (ex: 520a & 511wa) which support different subsets of options. In both cases using the http stream is recommended.
+Frigate works much better with newer reolink cameras that are setup with the below options:
+
+If available, recommended settings are:
+
+- `On, fluency first` this sets the camera to CBR (constant bit rate)
+- `Interframe Space 1x` this sets the iframe interval to the same as the frame rate
 
 According to [this discussion](https://github.com/blakeblackshear/frigate/issues/3235#issuecomment-1135876973), the http video streams seem to be the most reliable for Reolink.
 
@@ -112,21 +105,7 @@ According to [this discussion](https://github.com/blakeblackshear/frigate/issues
 cameras:
   reolink:
     ffmpeg:
-      input_args:
-        - -avoid_negative_ts
-        - make_zero
-        - -fflags
-        - +genpts+discardcorrupt
-        - -flags
-        - low_delay
-        - -strict
-        - experimental
-        - -analyzeduration
-        - 1000M
-        - -probesize
-        - 1000M
-        - -rw_timeout
-        - "5000000"
+      input_args: preset-http-reolink
       inputs:
         - path: http://reolink_ip/flv?port=1935&app=bcs&stream=channel0_main.bcs&user=username&password=password
           roles:
@@ -148,6 +127,6 @@ In the Unifi 2.0 update Unifi Protect Cameras had a change in audio sample rate 
 ```yaml
 ffmpeg:
   output_args:
-    record: -f segment -segment_time 10 -segment_format mp4 -reset_timestamps 1 -strftime 1 -c:v copy -ar 44100 -c:a aac
-    rtmp: -c:v copy -f flv -ar 44100 -c:a aac
+    record: preset-record-ubiquiti
+    rtmp: preset-rtmp-ubiquiti
 ```

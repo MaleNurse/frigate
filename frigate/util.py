@@ -1,24 +1,27 @@
 import copy
 import datetime
-import hashlib
-import json
 import logging
-import math
-import signal
+import shlex
 import subprocess as sp
-import threading
-import time
+import json
+import re
+import signal
 import traceback
+import urllib.parse
+import yaml
+
 from abc import ABC, abstractmethod
+from collections import Counter
 from collections.abc import Mapping
 from multiprocessing import shared_memory
-from typing import AnyStr
+from typing import Any, AnyStr
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import psutil
+
+from frigate.const import REGEX_HTTP_CAMERA_USER_PASS, REGEX_RTSP_CAMERA_USER_PASS
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,33 @@ def deep_merge(dct1: dict, dct2: dict, override=False, merge_lists=False) -> dic
         else:
             merged[k] = copy.deepcopy(v2)
     return merged
+
+
+def load_config_with_no_duplicates(raw_config) -> dict:
+    """Get config ensuring duplicate keys are not allowed."""
+
+    # https://stackoverflow.com/a/71751051
+    class PreserveDuplicatesLoader(yaml.loader.Loader):
+        pass
+
+    def map_constructor(loader, node, deep=False):
+        keys = [loader.construct_object(node, deep=deep) for node, _ in node.value]
+        vals = [loader.construct_object(node, deep=deep) for _, node in node.value]
+        key_count = Counter(keys)
+        data = {}
+        for key, val in zip(keys, vals):
+            if key_count[key] > 1:
+                raise ValueError(
+                    f"Config input {key} is defined multiple times for the same field, this is not allowed."
+                )
+            else:
+                data[key] = val
+        return data
+
+    PreserveDuplicatesLoader.add_constructor(
+        yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, map_constructor
+    )
+    return yaml.load(raw_config, PreserveDuplicatesLoader)
 
 
 def draw_timestamp(
@@ -350,6 +380,47 @@ def yuv_crop_and_resize(frame, region, height=None):
     return yuv_cropped_frame
 
 
+def yuv_to_3_channel_yuv(yuv_frame):
+    height = yuv_frame.shape[0] // 3 * 2
+    width = yuv_frame.shape[1]
+
+    # flatten the image into array
+    yuv_data = yuv_frame.ravel()
+
+    # create a numpy array to hold all the 3 chanel yuv data
+    all_yuv_data = np.empty((height, width, 3), dtype=np.uint8)
+
+    y_count = height * width
+    uv_count = y_count // 4
+
+    # copy the y_channel
+    all_yuv_data[:, :, 0] = yuv_data[0:y_count].reshape((height, width))
+    # copy the u channel doubling each dimension
+    all_yuv_data[:, :, 1] = np.repeat(
+        np.reshape(
+            np.repeat(yuv_data[y_count : y_count + uv_count], repeats=2, axis=0),
+            (height // 2, width),
+        ),
+        repeats=2,
+        axis=0,
+    )
+    # copy the v channel doubling each dimension
+    all_yuv_data[:, :, 2] = np.repeat(
+        np.reshape(
+            np.repeat(
+                yuv_data[y_count + uv_count : y_count + uv_count + uv_count],
+                repeats=2,
+                axis=0,
+            ),
+            (height // 2, width),
+        ),
+        repeats=2,
+        axis=0,
+    )
+
+    return all_yuv_data
+
+
 def copy_yuv_to_position(
     destination_frame,
     destination_offset,
@@ -468,11 +539,32 @@ def copy_yuv_to_position(
         )
 
 
+def yuv_region_2_yuv(frame, region):
+    try:
+        # TODO: does this copy the numpy array?
+        yuv_cropped_frame = yuv_crop_and_resize(frame, region)
+        return yuv_to_3_channel_yuv(yuv_cropped_frame)
+    except:
+        print(f"frame.shape: {frame.shape}")
+        print(f"region: {region}")
+        raise
+
+
 def yuv_region_2_rgb(frame, region):
     try:
         # TODO: does this copy the numpy array?
         yuv_cropped_frame = yuv_crop_and_resize(frame, region)
         return cv2.cvtColor(yuv_cropped_frame, cv2.COLOR_YUV2RGB_I420)
+    except:
+        print(f"frame.shape: {frame.shape}")
+        print(f"region: {region}")
+        raise
+
+
+def yuv_region_2_bgr(frame, region):
+    try:
+        yuv_cropped_frame = yuv_crop_and_resize(frame, region)
+        return cv2.cvtColor(yuv_cropped_frame, cv2.COLOR_YUV2BGR_I420)
     except:
         print(f"frame.shape: {frame.shape}")
         print(f"region: {region}")
@@ -623,6 +715,196 @@ def load_labels(path, encoding="utf-8"):
             return {int(index): label.strip() for index, label in pairs}
         else:
             return {index: line.strip() for index, line in enumerate(lines)}
+
+
+def clean_camera_user_pass(line: str) -> str:
+    """Removes user and password from line."""
+    if line.startswith("rtsp://"):
+        return re.sub(REGEX_RTSP_CAMERA_USER_PASS, "://*:*@", line)
+    else:
+        return re.sub(REGEX_HTTP_CAMERA_USER_PASS, "user=*&password=*", line)
+
+
+def escape_special_characters(path: str) -> str:
+    """Cleans reserved characters to encodings for ffmpeg."""
+    try:
+        found = re.search(REGEX_RTSP_CAMERA_USER_PASS, path).group(0)[3:-1]
+        pw = found[(found.index(":") + 1) :]
+        return path.replace(pw, urllib.parse.quote_plus(pw))
+    except AttributeError:
+        # path does not have user:pass
+        return path
+
+
+def get_cpu_stats() -> dict[str, dict]:
+    """Get cpu usages for each process id"""
+    usages = {}
+    # -n=2 runs to ensure extraneous values are not included
+    top_command = ["top", "-b", "-n", "2"]
+
+    p = sp.run(
+        top_command,
+        encoding="ascii",
+        capture_output=True,
+    )
+
+    if p.returncode != 0:
+        logger.error(p.stderr)
+        return usages
+    else:
+        lines = p.stdout.split("\n")
+
+        for line in lines:
+            stats = list(filter(lambda a: a != "", line.strip().split(" ")))
+            try:
+                usages[stats[0]] = {
+                    "cpu": stats[8],
+                    "mem": stats[9],
+                }
+            except:
+                continue
+
+        return usages
+
+
+def get_amd_gpu_stats() -> dict[str, str]:
+    """Get stats using radeontop."""
+    radeontop_command = ["radeontop", "-d", "-", "-l", "1"]
+
+    p = sp.run(
+        radeontop_command,
+        encoding="ascii",
+        capture_output=True,
+    )
+
+    if p.returncode != 0:
+        logger.error(p.stderr)
+        return None
+    else:
+        usages = p.stdout.split(",")
+        results: dict[str, str] = {}
+
+        for hw in usages:
+            if "gpu" in hw:
+                results["gpu"] = f"{hw.strip().split(' ')[1].replace('%', '')} %"
+            elif "vram" in hw:
+                results["mem"] = f"{hw.strip().split(' ')[1].replace('%', '')} %"
+
+        return results
+
+
+def get_intel_gpu_stats() -> dict[str, str]:
+    """Get stats using intel_gpu_top."""
+    intel_gpu_top_command = [
+        "timeout",
+        "0.5s",
+        "intel_gpu_top",
+        "-J",
+        "-o",
+        "-",
+        "-s",
+        "1",
+    ]
+
+    p = sp.run(
+        intel_gpu_top_command,
+        encoding="ascii",
+        capture_output=True,
+    )
+
+    # timeout has a non-zero returncode when timeout is reached
+    if p.returncode != 124:
+        logger.error(p.stderr)
+        return None
+    else:
+        reading = "".join(p.stdout.split())
+        results: dict[str, str] = {}
+
+        # render is used for qsv
+        render = []
+        for result in re.findall('"Render/3D/0":{[a-z":\d.,%]+}', reading):
+            packet = json.loads(result[14:])
+            single = packet.get("busy", 0.0)
+            render.append(float(single))
+
+        if render:
+            render_avg = sum(render) / len(render)
+        else:
+            render_avg = 1
+
+        # video is used for vaapi
+        video = []
+        for result in re.findall('"Video/\d":{[a-z":\d.,%]+}', reading):
+            packet = json.loads(result[10:])
+            single = packet.get("busy", 0.0)
+            video.append(float(single))
+
+        if video:
+            video_avg = sum(video) / len(video)
+        else:
+            video_avg = 1
+
+        results["gpu"] = f"{round((video_avg + render_avg) / 2, 2)} %"
+        results["mem"] = "- %"
+        return results
+
+
+def get_nvidia_gpu_stats() -> dict[str, str]:
+    """Get stats using nvidia-smi."""
+    nvidia_smi_command = [
+        "nvidia-smi",
+        "--query-gpu=gpu_name,utilization.gpu,memory.used,memory.total",
+        "--format=csv",
+    ]
+
+    p = sp.run(
+        nvidia_smi_command,
+        encoding="ascii",
+        capture_output=True,
+    )
+
+    if p.returncode != 0:
+        logger.error(p.stderr)
+        return None
+    else:
+        usages = p.stdout.split("\n")[1].strip().split(",")
+        memory_percent = f"{round(float(usages[2].replace(' MiB', '').strip()) / float(usages[3].replace(' MiB', '').strip()) * 100, 1)} %"
+        results: dict[str, str] = {
+            "name": usages[0],
+            "gpu": usages[1].strip(),
+            "mem": memory_percent,
+        }
+
+        return results
+
+
+def ffprobe_stream(path: str) -> sp.CompletedProcess:
+    """Run ffprobe on stream."""
+    clean_path = escape_special_characters(path)
+    ffprobe_cmd = [
+        "ffprobe",
+        "-timeout",
+        "1000000",
+        "-print_format",
+        "json",
+        "-show_entries",
+        "stream=codec_long_name,width,height,bit_rate,duration,display_aspect_ratio,avg_frame_rate",
+        "-loglevel",
+        "quiet",
+        clean_path,
+    ]
+    return sp.run(ffprobe_cmd, capture_output=True)
+
+
+def vainfo_hwaccel() -> sp.CompletedProcess:
+    """Run vainfo."""
+    ffprobe_cmd = ["vainfo"]
+    return sp.run(ffprobe_cmd, capture_output=True)
+
+
+def get_ffmpeg_arg_list(arg: Any) -> list:
+    """Use arg if list or convert to list format."""
+    return arg if isinstance(arg, list) else shlex.split(arg)
 
 
 class FrameManager(ABC):

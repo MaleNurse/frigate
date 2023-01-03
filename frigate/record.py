@@ -5,7 +5,6 @@ import multiprocessing as mp
 import os
 import queue
 import random
-import shutil
 import string
 import subprocess as sp
 import threading
@@ -16,7 +15,7 @@ import psutil
 from peewee import JOIN, DoesNotExist
 
 from frigate.config import RetainModeEnum, FrigateConfig
-from frigate.const import CACHE_DIR, RECORD_DIR
+from frigate.const import CACHE_DIR, MAX_SEGMENT_DURATION, RECORD_DIR
 from frigate.models import Event, Recordings
 from frigate.util import area
 
@@ -169,9 +168,19 @@ class RecordingMaintainer(threading.Thread):
                     p = sp.run(ffprobe_cmd, capture_output=True)
                     if p.returncode == 0 and p.stdout.decode():
                         duration = float(p.stdout.decode().strip())
+                    else:
+                        duration = -1
+
+                    # ensure duration is within expected length
+                    if 0 < duration < MAX_SEGMENT_DURATION:
                         end_time = start_time + datetime.timedelta(seconds=duration)
                         self.end_time_cache[cache_path] = (end_time, duration)
                     else:
+                        if duration == -1:
+                            logger.warning(
+                                f"Failed to probe corrupt segment {f}: {p.returncode} - {p.stderr}"
+                            )
+
                         logger.warning(f"Discarding a corrupt recording segment: {f}")
                         Path(cache_path).unlink(missing_ok=True)
                         continue
@@ -251,8 +260,8 @@ class RecordingMaintainer(threading.Thread):
     def store_segment(
         self,
         camera,
-        start_time,
-        end_time,
+        start_time: datetime.datetime,
+        end_time: datetime.datetime,
         duration,
         cache_path,
         store_mode: RetainModeEnum,
@@ -267,24 +276,57 @@ class RecordingMaintainer(threading.Thread):
             self.end_time_cache.pop(cache_path, None)
             return
 
-        directory = os.path.join(RECORD_DIR, start_time.strftime("%Y-%m/%d/%H"), camera)
+        directory = os.path.join(
+            RECORD_DIR,
+            start_time.replace(tzinfo=datetime.timezone.utc)
+            .astimezone(tz=None)
+            .strftime("%Y-%m-%d/%H"),
+            camera,
+        )
 
         if not os.path.exists(directory):
             os.makedirs(directory)
 
-        file_name = f"{start_time.strftime('%M.%S.mp4')}"
+        file_name = (
+            f"{start_time.replace(tzinfo=datetime.timezone.utc).strftime('%M.%S.mp4')}"
+        )
         file_path = os.path.join(directory, file_name)
 
         try:
             if not os.path.exists(file_path):
                 start_frame = datetime.datetime.now().timestamp()
-                # copy then delete is required when recordings are stored on some network drives
-                shutil.copyfile(cache_path, file_path)
-                logger.debug(
-                    f"Copied {file_path} in {datetime.datetime.now().timestamp()-start_frame} seconds."
+
+                # add faststart to kept segments to improve metadata reading
+                ffmpeg_cmd = [
+                    "ffmpeg",
+                    "-y",
+                    "-i",
+                    cache_path,
+                    "-c",
+                    "copy",
+                    "-movflags",
+                    "+faststart",
+                    file_path,
+                ]
+
+                p = sp.run(
+                    ffmpeg_cmd,
+                    encoding="ascii",
+                    capture_output=True,
                 )
 
+                if p.returncode != 0:
+                    logger.error(f"Unable to convert {cache_path} to {file_path}")
+                    logger.error(p.stderr)
+                    return
+                else:
+                    logger.debug(
+                        f"Copied {file_path} in {datetime.datetime.now().timestamp()-start_frame} seconds."
+                    )
+
                 try:
+                    # get the segment size of the cache file
+                    # file without faststart is same size
                     segment_size = round(
                         float(os.path.getsize(cache_path)) / 1000000, 1
                     )

@@ -159,9 +159,9 @@ Events from the database. Accepts the following query string parameters:
 | -------------------- | ---- | --------------------------------------------- |
 | `before`             | int  | Epoch time                                    |
 | `after`              | int  | Epoch time                                    |
-| `camera`             | str  | Camera name                                   |
-| `label`              | str  | Label name                                    |
-| `zone`               | str  | Zone name                                     |
+| `cameras`            | str  | , separated list of cameras                   |
+| `labels`             | str  | , separated list of labels                    |
+| `zones`              | str  | , separated list of zones                     |
 | `limit`              | int  | Limit the number of events returned           |
 | `has_snapshot`       | int  | Filter to events that have snapshots (0 or 1) |
 | `has_clip`           | int  | Filter to events that have clips (0 or 1)     |
@@ -244,10 +244,6 @@ HTTP Live Streaming Video on Demand URL for the specified hour and camera. Can b
 
 HTTP Live Streaming Video on Demand URL for the specified event. Can be viewed in an application like VLC.
 
-### `GET /vod/event/<event-id>/index.m3u8`
-
-HTTP Live Streaming Video on Demand URL for the specified event. Can be viewed in an application like VLC.
-
 ### `GET /vod/<camera>/start/<start-timestamp>/end/<end-timestamp>/index.m3u8`
 
 HTTP Live Streaming Video on Demand URL for the camera with the specified time range. Can be viewed in an application like VLC.
@@ -264,3 +260,11 @@ Get recording segment details for the given timestamp range.
 | -------- | ---- | ------------------------------------- |
 | `after`  | int  | Unix timestamp for beginning of range |
 | `before` | int  | Unix timestamp for end of range       |
+
+### `GET /api/ffprobe`
+
+Get ffprobe output for camera feed paths.
+
+| param   | Type   | Description                        |
+| ------- | ------ | ---------------------------------- |
+| `paths` | string | `,` separated list of camera paths |
