@@ -14,12 +14,13 @@ from abc import ABC, abstractmethod
 from collections import Counter
 from collections.abc import Mapping
 from multiprocessing import shared_memory
-from typing import Any, AnyStr
+from typing import Any, AnyStr, Tuple
 
 import cv2
 import numpy as np
 import os
 import psutil
+import pytz
 
 from frigate.const import REGEX_HTTP_CAMERA_USER_PASS, REGEX_RTSP_CAMERA_USER_PASS
 
@@ -706,15 +707,17 @@ def load_labels(path, encoding="utf-8"):
       Dictionary mapping indices to labels.
     """
     with open(path, "r", encoding=encoding) as f:
+        labels = {index: "unknown" for index in range(91)}
         lines = f.readlines()
         if not lines:
             return {}
 
         if lines[0].split(" ", maxsplit=1)[0].isdigit():
             pairs = [line.split(" ", maxsplit=1) for line in lines]
-            return {int(index): label.strip() for index, label in pairs}
+            labels.update({int(index): label.strip() for index, label in pairs})
         else:
-            return {index: line.strip() for index, line in enumerate(lines)}
+            labels.update({index: line.strip() for index, line in enumerate(lines)})
+        return labels
 
 
 def clean_camera_user_pass(line: str) -> str:
@@ -736,11 +739,68 @@ def escape_special_characters(path: str) -> str:
         return path
 
 
+def get_cgroups_version() -> str:
+    """Determine what version of cgroups is enabled"""
+
+    stat_command = ["stat", "-fc", "%T", "/sys/fs/cgroup"]
+
+    p = sp.run(
+        stat_command,
+        encoding="ascii",
+        capture_output=True,
+    )
+
+    if p.returncode == 0:
+        value: str = p.stdout.strip().lower()
+
+        if value == "cgroup2fs":
+            return "cgroup2"
+        elif value == "tmpfs":
+            return "cgroup"
+        else:
+            logger.debug(
+                f"Could not determine cgroups version: unhandled filesystem {value}"
+            )
+    else:
+        logger.debug(f"Could not determine cgroups version:  {p.stderr}")
+
+    return "unknown"
+
+
+def get_docker_memlimit_bytes() -> int:
+    """Get mem limit in bytes set in docker if present. Returns -1 if no limit detected"""
+
+    # check running a supported cgroups version
+    if get_cgroups_version() == "cgroup2":
+
+        memlimit_command = ["cat", "/sys/fs/cgroup/memory.max"]
+
+        p = sp.run(
+            memlimit_command,
+            encoding="ascii",
+            capture_output=True,
+        )
+
+        if p.returncode == 0:
+            value: str = p.stdout.strip()
+
+            if value.isnumeric():
+                return int(value)
+            elif value.lower() == "max":
+                return -1
+        else:
+            logger.debug(f"Unable to get docker memlimit: {p.stderr}")
+
+    return -1
+
+
 def get_cpu_stats() -> dict[str, dict]:
     """Get cpu usages for each process id"""
     usages = {}
     # -n=2 runs to ensure extraneous values are not included
     top_command = ["top", "-b", "-n", "2"]
+
+    docker_memlimit = get_docker_memlimit_bytes() / 1024
 
     p = sp.run(
         top_command,
@@ -757,9 +817,18 @@ def get_cpu_stats() -> dict[str, dict]:
         for line in lines:
             stats = list(filter(lambda a: a != "", line.strip().split(" ")))
             try:
+
+                if docker_memlimit > 0:
+                    mem_res = int(stats[5])
+                    mem_pct = str(
+                        round((float(mem_res) / float(docker_memlimit)) * 100, 1)
+                    )
+                else:
+                    mem_pct = stats[9]
+
                 usages[stats[0]] = {
                     "cpu": stats[8],
-                    "mem": stats[9],
+                    "mem": mem_pct,
                 }
             except:
                 continue
@@ -778,7 +847,7 @@ def get_amd_gpu_stats() -> dict[str, str]:
     )
 
     if p.returncode != 0:
-        logger.error(p.stderr)
+        logger.error(f"Unable to poll radeon GPU stats: {p.stderr}")
         return None
     else:
         usages = p.stdout.split(",")
@@ -814,7 +883,7 @@ def get_intel_gpu_stats() -> dict[str, str]:
 
     # timeout has a non-zero returncode when timeout is reached
     if p.returncode != 124:
-        logger.error(p.stderr)
+        logger.error(f"Unable to poll intel GPU stats: {p.stderr}")
         return None
     else:
         reading = "".join(p.stdout.split())
@@ -864,7 +933,7 @@ def get_nvidia_gpu_stats() -> dict[str, str]:
     )
 
     if p.returncode != 0:
-        logger.error(p.stderr)
+        logger.error(f"Unable to poll nvidia GPU stats: {p.stderr}")
         return None
     else:
         usages = p.stdout.split("\n")[1].strip().split(",")
@@ -972,3 +1041,14 @@ class SharedMemoryFrameManager(FrameManager):
             self.shm_store[name].close()
             self.shm_store[name].unlink()
             del self.shm_store[name]
+
+
+def get_tz_modifiers(tz_name: str) -> Tuple[str, str]:
+    seconds_offset = (
+        datetime.datetime.now(pytz.timezone(tz_name)).utcoffset().total_seconds()
+    )
+    hours_offset = int(seconds_offset / 60 / 60)
+    minutes_offset = int(seconds_offset / 60 - hours_offset * 60)
+    hour_modifier = f"{hours_offset} hour"
+    minute_modifier = f"{minutes_offset} minute"
+    return hour_modifier, minute_modifier

@@ -9,11 +9,12 @@ import { useApiHost } from '../api';
 import useSWR from 'swr';
 
 export default function Recording({ camera, date, hour = '00', minute = '00', second = '00' }) {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const { data: config } = useSWR('config');
   const currentDate = useMemo(
     () => (date ? parseISO(`${date}T${hour || '00'}:${minute || '00'}:${second || '00'}`) : new Date()),
     [date, hour, minute, second]
   );
+  const timezone = useMemo(() => config.ui?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone, [config]);
 
   const apiHost = useApiHost();
   const { data: recordingsSummary } = useSWR([`${camera}/recordings/summary`, { timezone }], {
@@ -113,7 +114,7 @@ export default function Recording({ camera, date, hour = '00', minute = '00', se
     }
   }, [seekSeconds, playlistIndex]);
 
-  if (!recordingsSummary || !recordings) {
+  if (!recordingsSummary || !recordings || !config) {
     return <ActivityIndicator />;
   }
 

@@ -22,7 +22,11 @@ from frigate.object_detection import ObjectDetectProcess
 logger = logging.getLogger(__name__)
 
 
-def get_latest_version() -> str:
+def get_latest_version(config: FrigateConfig) -> str:
+
+    if not config.telemetry.version_check:
+        return "disabled"
+
     try:
         request = requests.get(
             "https://api.github.com/repos/blakeblackshear/frigate/releases/latest",
@@ -40,6 +44,7 @@ def get_latest_version() -> str:
 
 
 def stats_init(
+    config: FrigateConfig,
     camera_metrics: dict[str, CameraMetricsTypes],
     detectors: dict[str, ObjectDetectProcess],
 ) -> StatsTrackingTypes:
@@ -47,7 +52,8 @@ def stats_init(
         "camera_metrics": camera_metrics,
         "detectors": detectors,
         "started": int(time.time()),
-        "latest_frigate_version": get_latest_version(),
+        "latest_frigate_version": get_latest_version(config),
+        "last_updated": int(time.time()),
     }
     return stats_tracking
 
@@ -123,7 +129,7 @@ async def set_gpu_stats(
         if isinstance(args, list):
             args = " ".join(args)
 
-        if args and args not in hwaccel_args and args not in hwaccel_errors:
+        if args and args not in hwaccel_args:
             hwaccel_args.append(args)
 
         for stream_input in camera.ffmpeg.inputs:
@@ -138,7 +144,10 @@ async def set_gpu_stats(
     stats: dict[str, dict] = {}
 
     for args in hwaccel_args:
-        if "cuvid" in args or "nvidia" in args:
+        if args in hwaccel_errors:
+            # known erroring args should automatically return as error
+            stats["error-gpu"] = {"gpu": -1, "mem": -1}
+        elif "cuvid" in args or "nvidia" in args:
             # nvidia GPU
             nvidia_usage = get_nvidia_gpu_stats()
 
@@ -212,6 +221,7 @@ def stats_snapshot(
             "process_fps": round(camera_stats["process_fps"].value, 2),
             "skipped_fps": round(camera_stats["skipped_fps"].value, 2),
             "detection_fps": round(camera_stats["detection_fps"].value, 2),
+            "detection_enabled": camera_stats["detection_enabled"].value,
             "pid": pid,
             "capture_pid": cpid,
             "ffmpeg_pid": ffmpeg_pid,
@@ -235,10 +245,15 @@ def stats_snapshot(
         "latest_version": stats_tracking["latest_frigate_version"],
         "storage": {},
         "temperatures": get_temperatures(),
+        "last_updated": int(time.time()),
     }
 
     for path in [RECORD_DIR, CLIPS_DIR, CACHE_DIR, "/dev/shm"]:
-        storage_stats = shutil.disk_usage(path)
+        try:
+            storage_stats = shutil.disk_usage(path)
+        except FileNotFoundError:
+            stats["service"]["storage"][path] = {}
+
         stats["service"]["storage"][path] = {
             "total": round(storage_stats.total / 1000000, 1),
             "used": round(storage_stats.used / 1000000, 1),

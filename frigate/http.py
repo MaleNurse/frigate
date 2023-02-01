@@ -41,6 +41,7 @@ from frigate.util import (
     ffprobe_stream,
     restart_frigate,
     vainfo_hwaccel,
+    get_tz_modifiers,
 )
 from frigate.storage import StorageMaintainer
 from frigate.version import VERSION
@@ -76,6 +77,7 @@ def create_app(
     app.storage_maintainer = storage_maintainer
     app.plus_api = plus_api
     app.camera_error_image = None
+    app.hwaccel_errors = []
 
     app.register_blueprint(bp)
 
@@ -90,7 +92,7 @@ def is_healthy():
 @bp.route("/events/summary")
 def events_summary():
     tz_name = request.args.get("timezone", default="utc", type=str)
-    tz_offset = f"{int(datetime.now(pytz.timezone(tz_name)).utcoffset().total_seconds()/60/60)} hour"
+    hour_modifier, minute_modifier = get_tz_modifiers(tz_name)
     has_clip = request.args.get("has_clip", type=int)
     has_snapshot = request.args.get("has_snapshot", type=int)
 
@@ -110,7 +112,10 @@ def events_summary():
             Event.camera,
             Event.label,
             fn.strftime(
-                "%Y-%m-%d", fn.datetime(Event.start_time, "unixepoch", tz_offset)
+                "%Y-%m-%d",
+                fn.datetime(
+                    Event.start_time, "unixepoch", hour_modifier, minute_modifier
+                ),
             ).alias("day"),
             Event.zones,
             fn.COUNT(Event.id).alias("count"),
@@ -120,7 +125,10 @@ def events_summary():
             Event.camera,
             Event.label,
             fn.strftime(
-                "%Y-%m-%d", fn.datetime(Event.start_time, "unixepoch", tz_offset)
+                "%Y-%m-%d",
+                fn.datetime(
+                    Event.start_time, "unixepoch", hour_modifier, minute_modifier
+                ),
             ),
             Event.zones,
         )
@@ -564,6 +572,7 @@ def events():
     before = request.args.get("before", type=float)
     has_clip = request.args.get("has_clip", type=int)
     has_snapshot = request.args.get("has_snapshot", type=int)
+    in_progress = request.args.get("in_progress", type=int)
     include_thumbnails = request.args.get("include_thumbnails", default=1, type=int)
     favorites = request.args.get("favorites", type=int)
 
@@ -601,8 +610,13 @@ def events():
         # for example a sub label 'bob' would get events
         # with sub labels 'bob' and 'bob, john'
         sub_label_clauses = []
+        filtered_sub_labels = sub_labels.split(",")
 
-        for label in sub_labels.split(","):
+        if "None" in filtered_sub_labels:
+            filtered_sub_labels.remove("None")
+            sub_label_clauses.append((Event.sub_label.is_null()))
+
+        for label in filtered_sub_labels:
             sub_label_clauses.append((Event.sub_label.cast("text") % f"*{label}*"))
 
         sub_label_clause = reduce(operator.or_, sub_label_clauses)
@@ -612,8 +626,13 @@ def events():
         # use matching so events with multiple zones
         # still match on a search where any zone matches
         zone_clauses = []
+        filtered_zones = zones.split(",")
 
-        for zone in zones.split(","):
+        if "None" in filtered_zones:
+            filtered_zones.remove("None")
+            zone_clauses.append((Event.zones.length() == 0))
+
+        for zone in filtered_zones:
             zone_clauses.append((Event.zones.cast("text") % f'*"{zone}"*'))
 
         zone_clause = reduce(operator.or_, zone_clauses)
@@ -630,6 +649,9 @@ def events():
 
     if not has_snapshot is None:
         clauses.append((Event.has_snapshot == has_snapshot))
+
+    if not in_progress is None:
+        clauses.append((Event.end_time.is_null(in_progress)))
 
     if not include_thumbnails:
         excluded_fields.append(Event.thumbnail)
@@ -695,6 +717,8 @@ def config_raw():
 
 @bp.route("/config/save", methods=["POST"])
 def config_save():
+    save_option = request.args.get("save_option")
+
     new_config = request.get_data().decode()
 
     if not new_config:
@@ -732,19 +756,25 @@ def config_save():
             jsonify(
                 {
                     "success": False,
-                    "message": f"Could not write config file, be sure that frigate has write permission on the config file.",
+                    "message": f"Could not write config file, be sure that Frigate has write permission on the config file.",
                 }
             ),
             400,
         )
 
-    try:
-        restart_frigate()
-    except Exception as e:
-        logging.error(f"Error restarting frigate: {e}")
-        return "Config successfully saved, unable to restart frigate", 200
+    if save_option == "restart":
+        try:
+            restart_frigate()
+        except Exception as e:
+            logging.error(f"Error restarting Frigate: {e}")
+            return "Config successfully saved, unable to restart Frigate", 200
 
-    return "Config successfully saved, restarting...", 200
+        return (
+            "Config successfully saved, restarting (this can take up to one minute)...",
+            200,
+        )
+    else:
+        return "Config successfully saved.", 200
 
 
 @bp.route("/config/schema.json")
@@ -761,7 +791,11 @@ def version():
 
 @bp.route("/stats")
 def stats():
-    stats = stats_snapshot(current_app.frigate_config, current_app.stats_tracking)
+    stats = stats_snapshot(
+        current_app.frigate_config,
+        current_app.stats_tracking,
+        current_app.hwaccel_errors,
+    )
     return jsonify(stats)
 
 
@@ -836,7 +870,7 @@ def latest_frame(camera_name):
         response.headers["Content-Type"] = "image/jpeg"
         response.headers["Cache-Control"] = "no-store"
         return response
-    elif camera_name == "birdseye" and current_app.frigate_config.restream.birdseye:
+    elif camera_name == "birdseye" and current_app.frigate_config.birdseye.restream:
         frame = cv2.cvtColor(
             current_app.detected_frames_processor.get_current_frame(camera_name),
             cv2.COLOR_YUV2BGR_I420,
@@ -861,8 +895,14 @@ def latest_frame(camera_name):
 @bp.route("/recordings/storage", methods=["GET"])
 def get_recordings_storage_usage():
     recording_stats = stats_snapshot(
-        current_app.frigate_config, current_app.stats_tracking, []
+        current_app.frigate_config,
+        current_app.stats_tracking,
+        current_app.hwaccel_errors,
     )["service"]["storage"][RECORD_DIR]
+
+    if not recording_stats:
+        return jsonify({})
+
     total_mb = recording_stats["total"]
 
     camera_usages: dict[
@@ -882,12 +922,14 @@ def get_recordings_storage_usage():
 @bp.route("/<camera_name>/recordings/summary")
 def recordings_summary(camera_name):
     tz_name = request.args.get("timezone", default="utc", type=str)
-    tz_offset = f"{int(datetime.now(pytz.timezone(tz_name)).utcoffset().total_seconds()/60/60)} hour"
+    hour_modifier, minute_modifier = get_tz_modifiers(tz_name)
     recording_groups = (
         Recordings.select(
             fn.strftime(
                 "%Y-%m-%d %H",
-                fn.datetime(Recordings.start_time, "unixepoch", tz_offset),
+                fn.datetime(
+                    Recordings.start_time, "unixepoch", hour_modifier, minute_modifier
+                ),
             ).alias("hour"),
             fn.SUM(Recordings.duration).alias("duration"),
             fn.SUM(Recordings.motion).alias("motion"),
@@ -897,13 +939,17 @@ def recordings_summary(camera_name):
         .group_by(
             fn.strftime(
                 "%Y-%m-%d %H",
-                fn.datetime(Recordings.start_time, "unixepoch", tz_offset),
+                fn.datetime(
+                    Recordings.start_time, "unixepoch", hour_modifier, minute_modifier
+                ),
             )
         )
         .order_by(
             fn.strftime(
                 "%Y-%m-%d H",
-                fn.datetime(Recordings.start_time, "unixepoch", tz_offset),
+                fn.datetime(
+                    Recordings.start_time, "unixepoch", hour_modifier, minute_modifier
+                ),
             ).desc()
         )
     )
@@ -912,7 +958,9 @@ def recordings_summary(camera_name):
         Event.select(
             fn.strftime(
                 "%Y-%m-%d %H",
-                fn.datetime(Event.start_time, "unixepoch", tz_offset),
+                fn.datetime(
+                    Event.start_time, "unixepoch", hour_modifier, minute_modifier
+                ),
             ).alias("hour"),
             fn.COUNT(Event.id).alias("count"),
         )
@@ -920,7 +968,9 @@ def recordings_summary(camera_name):
         .group_by(
             fn.strftime(
                 "%Y-%m-%d %H",
-                fn.datetime(Event.start_time, "unixepoch", tz_offset),
+                fn.datetime(
+                    Event.start_time, "unixepoch", hour_modifier, minute_modifier
+                ),
             ),
         )
         .objects()
@@ -1117,17 +1167,11 @@ def vod_hour_no_timezone(year_month, day, hour, camera_name):
 # TODO make this nicer when vod module is removed
 @bp.route("/vod/<year_month>/<day>/<hour>/<camera_name>/<tz_name>")
 def vod_hour(year_month, day, hour, camera_name, tz_name):
-    tz_offset = int(
-        datetime.now(pytz.timezone(tz_name.replace(",", "/")))
-        .utcoffset()
-        .total_seconds()
-        / 60
-        / 60
-    )
     parts = year_month.split("-")
-    start_date = datetime(
-        int(parts[0]), int(parts[1]), int(day), int(hour), tzinfo=timezone.utc
-    ) - timedelta(hours=tz_offset)
+    start_date = (
+        datetime(int(parts[0]), int(parts[1]), int(day), int(hour), tzinfo=timezone.utc)
+        - datetime.now(pytz.timezone(tz_name.replace(",", "/"))).utcoffset()
+    )
     end_date = start_date + timedelta(hours=1) - timedelta(milliseconds=1)
     start_ts = start_date.timestamp()
     end_ts = end_date.timestamp()

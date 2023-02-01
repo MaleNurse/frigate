@@ -14,19 +14,19 @@ This page makes use of presets of FFmpeg args. For more information on presets, 
 Note that mjpeg cameras require encoding the video into h264 for recording, and restream roles. This will use significantly more CPU than if the cameras supported h264 feeds directly. It is recommended to use the restream role to create an h264 restream and then use that as the source for ffmpeg.
 
 ```yaml
+go2rtc:
+  streams:
+    mjpeg_cam: ffmpeg:{your_mjpeg_stream_url}#video=h264#hardware # <- use hardware acceleration to create an h264 stream usable for other components.
+
+cameras:
+  ...
   mjpeg_cam:
     ffmpeg:
       inputs:
-        - path: rtsp://localhost:8554/mjpeg_cam
+        - path: rtsp://127.0.0.1:8554/mjpeg_cam
           roles:
             - detect
             - record
-        - path: {your_mjpeg_stream_url}
-          roles:
-            - restream
-    restream:
-      enabled: true
-      video_encoding: h264
 ```
 
 ## JPEG Stream Cameras
@@ -106,16 +106,24 @@ If available, recommended settings are:
 According to [this discussion](https://github.com/blakeblackshear/frigate/issues/3235#issuecomment-1135876973), the http video streams seem to be the most reliable for Reolink.
 
 ```yaml
+go2rtc:
+  streams:
+    reolink: 
+      - http://reolink_ip/flv?port=1935&app=bcs&stream=channel0_main.bcs&user=username&password=password
+      - ffmpeg:reolink#audio=opus
+    reolink_sub: 
+      - http://reolink_ip/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user=username&password=password
+
 cameras:
   reolink:
     ffmpeg:
-      input_args: preset-http-reolink
       inputs:
-        - path: http://reolink_ip/flv?port=1935&app=bcs&stream=channel0_main.bcs&user=username&password=password
+        - path: rtsp://127.0.0.1:8554/reolink?video=copy&audio=aac
+          input_args: preset-rtsp-restream
           roles:
             - record
-            - rtmp
-        - path: http://reolink_ip/flv?port=1935&app=bcs&stream=channel0_ext.bcs&user=username&password=password
+        - path: rtsp://127.0.0.1:8554/reolink_sub?video=copy
+          input_args: preset-rtsp-restream
           roles:
             - detect
     detect:

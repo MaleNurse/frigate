@@ -148,7 +148,7 @@ class BirdsEyeFrameManager:
         self.yuv_shape = (height * 3 // 2, width)
         self.frame = np.ndarray(self.yuv_shape, dtype=np.uint8)
 
-        # initialize the frame as black and with the frigate logo
+        # initialize the frame as black and with the Frigate logo
         self.blank_frame = np.zeros(self.yuv_shape, np.uint8)
         self.blank_frame[:] = 128
         self.blank_frame[0 : self.frame_shape[0], 0 : self.frame_shape[1]] = 16
@@ -176,7 +176,7 @@ class BirdsEyeFrameManager:
                 x_offset : x_offset + transparent_layer.shape[0],
             ] = transparent_layer
         else:
-            logger.warning("Unable to read frigate logo")
+            logger.warning("Unable to read Frigate logo")
 
         self.frame[:] = self.blank_frame
 
@@ -415,15 +415,15 @@ def output_frames(config: FrigateConfig, video_output_queue):
 
     for camera, cam_config in config.cameras.items():
         width = int(
-            cam_config.restream.jsmpeg.height
+            cam_config.live.height
             * (cam_config.frame_shape[1] / cam_config.frame_shape[0])
         )
         converters[camera] = FFMpegConverter(
             cam_config.frame_shape[1],
             cam_config.frame_shape[0],
             width,
-            cam_config.restream.jsmpeg.height,
-            cam_config.restream.jsmpeg.quality,
+            cam_config.live.height,
+            cam_config.live.quality,
         )
         broadcasters[camera] = BroadcastThread(
             camera, converters[camera], websocket_server
@@ -436,7 +436,7 @@ def output_frames(config: FrigateConfig, video_output_queue):
             config.birdseye.width,
             config.birdseye.height,
             config.birdseye.quality,
-            config.restream.birdseye,
+            config.birdseye.restream,
         )
         broadcasters["birdseye"] = BroadcastThread(
             "birdseye", converters["birdseye"], websocket_server
@@ -449,7 +449,7 @@ def output_frames(config: FrigateConfig, video_output_queue):
 
     birdseye_manager = BirdsEyeFrameManager(config, frame_manager)
 
-    if config.restream.birdseye:
+    if config.birdseye.restream:
         birdseye_buffer = frame_manager.create(
             "birdseye",
             birdseye_manager.yuv_shape[0] * birdseye_manager.yuv_shape[1],
@@ -479,7 +479,7 @@ def output_frames(config: FrigateConfig, video_output_queue):
             converters[camera].write(frame.tobytes())
 
         if config.birdseye.enabled and (
-            config.restream.birdseye
+            config.birdseye.restream
             or any(
                 ws.environ["PATH_INFO"].endswith("birdseye")
                 for ws in websocket_server.manager
@@ -494,7 +494,7 @@ def output_frames(config: FrigateConfig, video_output_queue):
             ):
                 frame_bytes = birdseye_manager.frame.tobytes()
 
-                if config.restream.birdseye:
+                if config.birdseye.restream:
                     birdseye_buffer[:] = frame_bytes
 
                 converters["birdseye"].write(frame_bytes)

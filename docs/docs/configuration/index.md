@@ -27,7 +27,7 @@ cameras:
 
 ### VSCode Configuration Schema
 
-VSCode (and VSCode addon) supports the JSON schemas which will automatically validate the config. This can be added by adding `# yaml-language-server: $schema=http://frigate_host:5000/api/config/schema.json` to the top of the config file. `frigate_host` being the IP address of frigate or `ccab4aaf-frigate` if running in the addon.
+VSCode (and VSCode addon) supports the JSON schemas which will automatically validate the config. This can be added by adding `# yaml-language-server: $schema=http://frigate_host:5000/api/config/schema.json` to the top of the config file. `frigate_host` being the IP address of Frigate or `ccab4aaf-frigate` if running in the addon.
 
 ### Full configuration reference:
 
@@ -52,6 +52,8 @@ mqtt:
   # NOTE: must be unique if you are running multiple instances
   client_id: frigate
   # Optional: user
+  # NOTE: MQTT user can be specified with an environment variables that must begin with 'FRIGATE_'.
+  #       e.g. user: '{FRIGATE_MQTT_USER}'
   user: mqtt_user
   # Optional: password
   # NOTE: MQTT password can be specified with an environment variables that must begin with 'FRIGATE_'.
@@ -124,6 +126,9 @@ environment_vars:
 birdseye:
   # Optional: Enable birdseye view (default: shown below)
   enabled: True
+  # Optional: Restream birdseye via RTSP (default: shown below)
+  # NOTE: Enabling this will set birdseye to run 24/7 which may increase CPU usage somewhat.
+  restream: False
   # Optional: Width of the output resolution (default: shown below)
   width: 1280
   # Optional: Height of the output resolution (default: shown below)
@@ -169,7 +174,7 @@ detect:
   # Optional: enables detection for the camera (default: True)
   # This value can be set via MQTT and will be updated in startup based on retained value
   enabled: True
-  # Optional: Number of frames without a detection before frigate considers an object to be gone. (default: 5x the frame rate)
+  # Optional: Number of frames without a detection before Frigate considers an object to be gone. (default: 5x the frame rate)
   max_disappeared: 25
   # Optional: Configuration for stationary object tracking
   stationary:
@@ -266,11 +271,6 @@ record:
   # Optional: Enable recording (default: shown below)
   # WARNING: If recording is disabled in the config, turning it on via
   #          the UI or MQTT later will have no effect.
-  # WARNING: Frigate does not currently support limiting recordings based
-  #          on available disk space automatically. If using recordings,
-  #          you must specify retention settings for a number of days that
-  #          will fit within the available disk space of your drive or Frigate
-  #          will crash.
   enabled: False
   # Optional: Number of minutes to wait between cleanup runs (default: shown below)
   # This can be used to reduce the frequency of deleting recording segments from disk if you want to minimize i/o
@@ -350,28 +350,21 @@ rtmp:
   enabled: False
 
 # Optional: Restream configuration
-# NOTE: Can be overridden at the camera level
-restream:
-  # Optional: Enable the restream (default: True)
-  enabled: True
-  # Optional: Force audio compatibility with browsers (default: shown below)
-  force_audio: True
-  # Optional: Video encoding to be used. By default the codec will be copied but
-  # it can be switched to another or an MJPEG stream can be encoded and restreamed
-  # as h264 (default: shown below)
-  video_encoding: "copy"
-  # Optional: Restream birdseye via RTSP (default: shown below)
-  # NOTE: Enabling this will set birdseye to run 24/7 which may increase CPU usage somewhat.
-  birdseye: False
-  # Optional: jsmpeg stream configuration for WebUI
-  jsmpeg:
-    # Optional: Set the height of the jsmpeg stream. (default: 720)
-    # This must be less than or equal to the height of the detect stream. Lower resolutions
-    # reduce bandwidth required for viewing the jsmpeg stream. Width is computed to match known aspect ratio.
-    height: 720
-    # Optional: Set the encode quality of the jsmpeg stream (default: shown below)
-    # 1 is the highest quality, and 31 is the lowest. Lower quality feeds utilize less CPU resources.
-    quality: 8
+# Uses https://github.com/AlexxIT/go2rtc (v1.0.1)
+go2rtc:
+
+# Optional: jsmpeg stream configuration for WebUI
+live:
+  # Optional: Set the name of the stream that should be used for live view
+  # in frigate WebUI. (default: name of camera)
+  stream_name: camera_name
+  # Optional: Set the height of the jsmpeg stream. (default: 720)
+  # This must be less than or equal to the height of the detect stream. Lower resolutions
+  # reduce bandwidth required for viewing the jsmpeg stream. Width is computed to match known aspect ratio.
+  height: 720
+  # Optional: Set the encode quality of the jsmpeg stream (default: shown below)
+  # 1 is the highest quality, and 31 is the lowest. Lower quality feeds utilize less CPU resources.
+  quality: 8
 
 # Optional: in-feed timestamp style configuration
 # NOTE: Can be overridden at the camera level
@@ -484,4 +477,19 @@ cameras:
       order: 0
       # Optional: Whether or not to show the camera in the Frigate UI (default: shown below)
       dashboard: True
+
+# Optional
+ui:
+  # Optional: Set the default live mode for cameras in the UI (default: shown below)
+  live_mode: mse
+  # Optional: Set a timezone to use in the UI (default: use browser local time)
+  timezone: None
+  # Optional: Use an experimental recordings / camera view UI (default: shown below)
+  experimental_ui: False
+
+# Optional: Telemetry configuration
+telemetry:
+  # Optional: Enable the latest version outbound check (default: shown below)
+  # NOTE: If you use the HomeAssistant integration, disabling this will prevent it from reporting new versions
+  version_check: True
 ```
