@@ -5,13 +5,11 @@ inputs:
     required: true
 outputs:
   image-name:
-    value: ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ github.ref_name }}-${{ steps.create-short-sha.outputs.SHORT_SHA }}
+    value: ${{ steps.lowercaseRepo.outputs.lowercase }}
   cache-name:
     value: ${{ steps.lowercaseRepo.outputs.lowercase }}:cache
   image-name-hashed:
     value: ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ steps.create-short-sha.outputs.SHORT_SHA }}
-  image-name:
-    value: ${{ steps.lowercaseRepo.outputs.lowercase }}
     
 runs:
   using: "composite"
