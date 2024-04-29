@@ -55,7 +55,7 @@ jobs:
     runs-on: ubuntu-latest
     name: AMD64 Extra Build
     needs:
-      - amd64_build
+      - build
     steps:
       - name: Check out code
         uses: actions/checkout@v4
