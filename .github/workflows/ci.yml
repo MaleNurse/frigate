@@ -27,11 +27,11 @@ jobs:
         uses: ./.github/actions/setup
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Log in to the Container registry
+#        uses: docker/login-action@v3
+#        with:
+#          username: malenurse
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
 #      - name: Create short sha
 #        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
 #      - id: lowercaseRepo
@@ -61,11 +61,11 @@ jobs:
         uses: ./.github/actions/setup
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Log in to the Container registry
+#        uses: docker/login-action@v3
+#        with:
+#          username: malenurse
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
 #      - name: Create short sha
 #        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
       #- id: lowercaseRepo
@@ -105,11 +105,11 @@ jobs:
 #        uses: ASzc/change-string-case-action@v6
 #        with:
 #          string: ${{ github.repository }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Log in to the Container registry
+#        uses: docker/login-action@v3
+#        with:
+#          username: malenurse
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
 #      - name: Create short sha
 #        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
       #- id: lowercaseRepo
@@ -136,11 +136,11 @@ jobs:
         uses: ./.github/actions/setup
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Log in to the Container registry
+#        uses: docker/login-action@v3
+#        with:
+#          username: malenurse
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
 #      - name: Create short sha
 #        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
       #- id: lowercaseRepo
