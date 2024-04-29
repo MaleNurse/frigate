@@ -9,7 +9,7 @@ outputs:
   cache-name:
     value: ${{ steps.lowercaseRepo.outputs.lowercase }}:cache
 runs:
-#  using: "composite"
+  using: "composite"
   steps:
     # Stop docker so we can mount more space at /var/lib/docker
     - name: Stop docker
