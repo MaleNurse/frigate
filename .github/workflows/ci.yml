@@ -101,6 +101,8 @@ jobs:
       - amd64_build
       - arm64_build
     steps:
+      - name: Check out code
+        uses: actions/checkout@v4
       - name: Set up QEMU and Buildx
         id: setup
         uses: ./.github/actions/setup
