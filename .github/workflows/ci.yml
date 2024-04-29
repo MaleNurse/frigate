@@ -16,9 +16,9 @@ env:
   PYTHON_VERSION: 3.9
 
 jobs:
-  amd64_build:
+  build:
     runs-on: ubuntu-latest
-    name: AMD64 Build
+    name: AMD64/ARM64 Build
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -38,94 +38,18 @@ jobs:
 #        uses: ASzc/change-string-case-action@v5
 #        with:
 #          string: ${{ github.repository }}
-      - name: Build and push amd64 standard build
+      - name: Build and push standard build
         uses: docker/build-push-action@v5
         with:
           context: .
           file: docker/main/Dockerfile
           push: true
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           target: frigate
           tags: |
-            ${{ steps.setup.outputs.image-name-hashed }}-amd64
-          cache-from: type=registry,ref=${{ steps.setup.outputs.cache-name }}-amd64
-          
-  arm64_build:
-    runs-on: ubuntu-latest
-    name: ARM Build
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-      - name: Set up QEMU and Buildx
-        id: setup
-        uses: ./.github/actions/setup
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-#      - name: Create short sha
-#        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
-#      - id: lowercaseRepo2
-#        uses: ASzc/change-string-case-action@v5
-#        with:
-#          string: ${{ github.repository }}
-      - name: Build and push arm64 standard build
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: docker/main/Dockerfile
-          push: true
-          platforms: linux/arm64
-          target: frigate
-          tags: |
-            ${{ steps.setup.outputs.image-name-hashed }}-arm64
-          cache-from: type=registry,ref=${{ steps.setup.outputs.cache-name }}-arm64
-      - name: Build and push RPi build
-        uses: docker/bake-action@v4
-        with:
-          push: true
-          targets: rpi
-          files: docker/rpi/rpi.hcl
-          set: |
-            rpi.tags=${{ steps.setup.outputs.image-name-hashed }}-rpi
-            *.cache-from=type=registry,ref=${{ steps.setup.outputs.cache-name }}-arm64
-            *.cache-to=type=registry,ref=${{ steps.setup.outputs.cache-name }}-arm64,mode=max
-          
-  assemble_default_build:
-    runs-on: ubuntu-latest
-    name: Assemble and push default build
-    needs:
-      - amd64_build
-      - arm64_build
-    steps:
-      - name: Check out code
-        uses: actions/checkout@v4
-      - name: Set up QEMU and Buildx
-        id: setup
-        uses: ./.github/actions/setup
-        with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-#      - name: Create short sha
-#        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
-#      - id: lowercaseRepo3
-#        uses: ASzc/change-string-case-action@v5
-#        with:
-#          string: ${{ github.repository }}
-      - uses: int128/docker-manifest-create-action@v2
-        with:
-          tags: ${{ steps.setup.outputs.image-name }} -t ${{ steps.setup.outputs.image-name-hashed }}
-          sources: |
-            ${{ steps.setup.outputs.image-name-hashed }}-amd64
-            ${{ steps.setup.outputs.image-name-hashed }}-arm64
-            ${{ steps.setup.outputs.image-name-hashed }}-rpi
+            ${{ steps.setup.outputs.image-name-hashed }}
+            ${{ steps.setup.outputs.image-name }}
+          cache-from: type=registry,ref=${{ steps.setup.outputs.cache-name }}
 
   amd64_extra_builds:
     runs-on: ubuntu-latest
@@ -161,5 +85,5 @@ jobs:
           files: docker/tensorrt/trt.hcl
           set: |
             tensorrt.tags=${{ steps.setup.outputs.image-name-hashed }}-tensorrt
-            *.cache-from=type=registry,ref=${{ steps.setup.outputs.cache-name }}-amd64
-            *.cache-to=type=registry,ref=${{ steps.setup.outputs.cache-name }}-amd64,mode=max
+            *.cache-from=type=registry,ref=${{ steps.setup.outputs.cache-name }}
+            *.cache-to=type=registry,ref=${{ steps.setup.outputs.cache-name }},mode=max
