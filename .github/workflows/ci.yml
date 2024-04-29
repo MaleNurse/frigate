@@ -27,17 +27,17 @@ jobs:
         uses: ./.github/actions/setup
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Create short sha
-        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
-      - id: lowercaseRepo
-        uses: ASzc/change-string-case-action@v5
-        with:
-          string: ${{ github.repository }}
+#      - name: Log in to the Container registry
+#        uses: docker/login-action@v3
+#        with:
+#          username: malenurse
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Create short sha
+#        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+#      - id: lowercaseRepo
+#        uses: ASzc/change-string-case-action@v5
+#        with:
+#          string: ${{ github.repository }}
       - name: Build and push amd64 standard build
         uses: docker/build-push-action@v5
         with:
@@ -47,7 +47,7 @@ jobs:
           platforms: linux/amd64
           target: frigate
           tags: |
-            ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-amd64
+            ${{ steps.setup.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-amd64
           cache-from: type=registry,ref=${{ steps.setup.outputs.cache-name }}-amd64
           
   arm64_build:
@@ -61,13 +61,13 @@ jobs:
         uses: ./.github/actions/setup
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Create short sha
-        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+#      - name: Log in to the Container registry
+#        uses: docker/login-action@v3
+#        with:
+#          username: malenurse
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Create short sha
+#        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
       #- id: lowercaseRepo
       #  uses: ASzc/change-string-case-action@v5
       #  with:
@@ -81,7 +81,7 @@ jobs:
           platforms: linux/arm64
           target: frigate
           tags: |
-            ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-arm64
+            ${{ steps.setup.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-arm64
           cache-from: type=registry,ref=${{ steps.setup.outputs.cache-name }}-arm64
       - name: Build and push RPi build
         uses: docker/bake-action@v4
@@ -90,7 +90,7 @@ jobs:
           targets: rpi
           files: docker/rpi/rpi.hcl
           set: |
-            rpi.tags=${{ steps.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-rpi
+            rpi.tags=${{ steps.setup.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-rpi
             *.cache-from=type=registry,ref=${{ steps.setup.outputs.cache-name }}-arm64
             *.cache-to=type=registry,ref=${{ steps.setup.outputs.cache-name }}-arm64,mode=max
           
@@ -101,17 +101,17 @@ jobs:
       - amd64_build
       - arm64_build
     steps:
-      - id: lowercaseRepo
-        uses: ASzc/change-string-case-action@v6
-        with:
-          string: ${{ github.repository }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Create short sha
-        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+#      - id: lowercaseRepo
+#        uses: ASzc/change-string-case-action@v6
+#        with:
+#          string: ${{ github.repository }}
+#      - name: Log in to the Container registry
+#        uses: docker/login-action@v3
+#        with:
+#          username: malenurse
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Create short sha
+#        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
       #- id: lowercaseRepo
       #  uses: ASzc/change-string-case-action@v5
       #  with:
@@ -136,13 +136,13 @@ jobs:
         uses: ./.github/actions/setup
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Log in to the Container registry
-        uses: docker/login-action@v3
-        with:
-          username: malenurse
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - name: Create short sha
-        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
+#      - name: Log in to the Container registry
+#        uses: docker/login-action@v3
+#        with:
+#          username: malenurse
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      - name: Create short sha
+#        run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
       #- id: lowercaseRepo
       #  uses: ASzc/change-string-case-action@v5
       #  with:
@@ -156,6 +156,6 @@ jobs:
           targets: tensorrt
           files: docker/tensorrt/trt.hcl
           set: |
-            tensorrt.tags=${{ steps.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-tensorrt
+            tensorrt.tags=${{ steps.setup.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-tensorrt
             *.cache-from=type=registry,ref=${{ steps.setup.outputs.cache-name }}-amd64
             *.cache-to=type=registry,ref=${{ steps.setup.outputs.cache-name }}-amd64,mode=max
