@@ -42,7 +42,8 @@ jobs:
           push: true
           platforms: linux/amd64
           target: frigate
-          tags: ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-amd64
+          tags: |
+            ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-amd64
           cache-from: type=registry,ref=${{ steps.setup.outputs.cache-name }}-amd64
           
   arm64_build:
@@ -71,7 +72,8 @@ jobs:
           push: true
           platforms: linux/arm64
           target: frigate
-          tags: ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-arm64
+          tags: |
+            ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }}-arm64
           cache-from: type=registry,ref=${{ steps.setup.outputs.cache-name }}-arm64
       - name: Build and push RPi build
         uses: docker/bake-action@v4
