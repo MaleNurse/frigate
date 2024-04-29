@@ -3,10 +3,6 @@ description: 'Set up QEMU and Buildx'
 inputs:
   GITHUB_TOKEN:
     required: true
-  DOCKERHUB_USERNAME:
-    required: true
-  DOCKERHUB_TOKEN:
-    required: true
 outputs:
   image-name:
     value: ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ github.ref_name }}-${{ steps.create-short-sha.outputs.SHORT_SHA }}
@@ -40,11 +36,11 @@ runs:
       uses: docker/setup-qemu-action@v2
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v2
-    - name: Log in to the Container registry
-      uses: docker/login-action@v3
-      with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#    - name: Log in to the Container registry
+#      uses: docker/login-action@v3
+#      with:
+#          username: ${{ secrets.DOCKERHUB_USERNAME }}
+#          password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Create version file
       run: make version
       shell: bash
