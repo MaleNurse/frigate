@@ -13,7 +13,7 @@ outputs:
   cache-name:
     value: ${{ steps.lowercaseRepo.outputs.lowercase }}:cache
 runs:
-  using: "composite"
+#  using: "composite"
   steps:
     # Stop docker so we can mount more space at /var/lib/docker
     - name: Stop docker
@@ -43,8 +43,8 @@ runs:
     - name: Log in to the Container registry
       uses: docker/login-action@v3
       with:
-        username: ${{ inputs.DOCKERHUB_USERNAME }}
-        password: ${{ inputs.DOCKERHUB_TOKEN }}
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
     - name: Create version file
       run: make version
       shell: bash
