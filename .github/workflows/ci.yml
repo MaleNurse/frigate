@@ -68,10 +68,10 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Create short sha
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
-      - id: lowercaseRepo
-        uses: ASzc/change-string-case-action@v5
-        with:
-          string: ${{ github.repository }}
+      #- id: lowercaseRepo
+      #  uses: ASzc/change-string-case-action@v5
+      #  with:
+      #    string: ${{ github.repository }}
       - name: Build and push arm64 standard build
         uses: docker/build-push-action@v5
         with:
@@ -112,10 +112,10 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Create short sha
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
-      - id: lowercaseRepo
-        uses: ASzc/change-string-case-action@v5
-        with:
-          string: ${{ github.repository }}
+      #- id: lowercaseRepo
+      #  uses: ASzc/change-string-case-action@v5
+      #  with:
+      #    string: ${{ github.repository }}
       - uses: int128/docker-manifest-create-action@v2
         with:
           tags: ${{ steps.lowercaseRepo.outputs.lowercase }}:${{ env.SHORT_SHA }} , ${{ steps.lowercaseRepo.outputs.lowercase }}:latest
@@ -143,10 +143,10 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: Create short sha
         run: echo "SHORT_SHA=${GITHUB_SHA::7}" >> $GITHUB_ENV
-      - id: lowercaseRepo
-        uses: ASzc/change-string-case-action@v5
-        with:
-          string: ${{ github.repository }}
+      #- id: lowercaseRepo
+      #  uses: ASzc/change-string-case-action@v5
+      #  with:
+      #    string: ${{ github.repository }}
       - name: Build and push TensorRT (x86 GPU)
         env:
           COMPUTE_LEVEL: "50 60 70 80 90"
