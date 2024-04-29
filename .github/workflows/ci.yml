@@ -121,7 +121,7 @@ jobs:
 #          string: ${{ github.repository }}
       - uses: int128/docker-manifest-create-action@v2
         with:
-          tags: ${{ steps.setup.outputs.image-name-hashed }}, ${{ steps.setup.outputs.image-name }}:latest
+          tags: ${{ steps.setup.outputs.image-name-hashed }} -t ${{ steps.setup.outputs.image-name }}
           sources: |
             ${{ steps.setup.outputs.image-name-hashed }}-amd64
             ${{ steps.setup.outputs.image-name-hashed }}-rpi
