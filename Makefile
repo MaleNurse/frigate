@@ -2,7 +2,7 @@ default_target: local
 
 COMMIT_HASH := $(shell git log -1 --pretty=format:"%h"|tail -1)
 VERSION = 0.14.0
-IMAGE_REPO ?= ghcr.io/blakeblackshear/frigate
+IMAGE_REPO ?= malenurse/frigate
 GITHUB_REF_NAME ?= $(shell git rev-parse --abbrev-ref HEAD)
 CURRENT_UID := $(shell id -u)
 CURRENT_GID := $(shell id -g)
@@ -21,7 +21,8 @@ local: version
 	docker buildx build --target=frigate --tag frigate:latest --load --file docker/main/Dockerfile .
 
 amd64:
-	docker buildx build --platform linux/amd64 --target=frigate --tag $(IMAGE_REPO):$(VERSION)-$(COMMIT_HASH) --file docker/main/Dockerfile .
+	docker buildx build --push --platform linux/amd64 --target=frigate --tag $(IMAGE_REPO):$(VERSION)-$(COMMIT_HASH) --tag $(IMAGE_REPO):latest --file docker/main/Dockerfile .
+	docker image rm $(IMAGE_REPO):$(VERSION)-$(COMMIT_HASH)
 
 arm64:
 	docker buildx build --platform linux/arm64 --target=frigate --tag $(IMAGE_REPO):$(VERSION)-$(COMMIT_HASH) --file docker/main/Dockerfile .
