@@ -31,7 +31,7 @@ runs:
     - id: lowercaseRepo
       uses: ASzc/change-string-case-action@v5
       with:
-        string: ${{ github.repository }}
+        string: malenurse/frigate
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v2
     - name: Set up Docker Buildx
