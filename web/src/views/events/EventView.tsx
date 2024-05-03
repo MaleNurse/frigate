@@ -270,6 +270,7 @@ export default function EventView({
                 ? ["cameras", "date", "motionOnly"]
                 : ["cameras", "reviewed", "date", "general"]
             }
+            currentSeverity={severityToggle}
             reviewSummary={reviewSummary}
             filter={filter}
             onUpdateFilter={updateFilter}
@@ -370,7 +371,13 @@ function DetectionReview({
       return null;
     }
 
-    const current = reviewItems[severity];
+    let current;
+
+    if (filter?.showAll) {
+      current = reviewItems.all;
+    } else {
+      current = reviewItems[severity];
+    }
 
     if (!current || current.length == 0) {
       return [];
@@ -513,7 +520,7 @@ function DetectionReview({
     }
 
     const element = contentRef.current?.querySelector(
-      `[data-start="${startTime}"]`,
+      `[data-start="${startTime + REVIEW_PADDING}"]`,
     );
     if (element) {
       scrollIntoView(element, {
@@ -798,6 +805,11 @@ function MotionReview({
         return;
       }
 
+      if (nextTimestamp >= timeRange.before - 4) {
+        setPlaying(false);
+        return;
+      }
+
       const handleTimeout = () => {
         setCurrentTime(nextTimestamp);
         timeoutIdRef.current = setTimeout(handleTimeout, 500 / playbackRate);
@@ -811,7 +823,7 @@ function MotionReview({
         }
       };
     }
-  }, [playing, playbackRate, nextTimestamp]);
+  }, [playing, playbackRate, nextTimestamp, setPlaying, timeRange]);
 
   const { alignStartDateToTimeline } = useTimelineUtils({
     segmentDuration,
@@ -955,37 +967,35 @@ function MotionReview({
         )}
       </div>
 
-      {!scrubbing && (
-        <VideoControls
-          className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-secondary"
-          features={{
-            volume: false,
-            seek: true,
-            playbackRate: true,
-          }}
-          isPlaying={playing}
-          playbackRates={[4, 8, 12, 16]}
-          playbackRate={playbackRate}
-          controlsOpen={controlsOpen}
-          setControlsOpen={setControlsOpen}
-          onPlayPause={setPlaying}
-          onSeek={(diff) => {
-            const wasPlaying = playing;
+      <VideoControls
+        className="absolute bottom-16 left-1/2 -translate-x-1/2 bg-secondary"
+        features={{
+          volume: false,
+          seek: true,
+          playbackRate: true,
+        }}
+        isPlaying={playing}
+        show={!scrubbing}
+        playbackRates={[4, 8, 12, 16]}
+        playbackRate={playbackRate}
+        controlsOpen={controlsOpen}
+        setControlsOpen={setControlsOpen}
+        onPlayPause={setPlaying}
+        onSeek={(diff) => {
+          const wasPlaying = playing;
 
-            if (wasPlaying) {
-              setPlaying(false);
-            }
+          if (wasPlaying) {
+            setPlaying(false);
+          }
 
-            setCurrentTime(currentTime + diff);
+          setCurrentTime(currentTime + diff);
 
-            if (wasPlaying) {
-              setTimeout(() => setPlaying(true), 100);
-            }
-          }}
-          onSetPlaybackRate={setPlaybackRate}
-          show={currentTime < timeRange.before - 4}
-        />
-      )}
+          if (wasPlaying) {
+            setTimeout(() => setPlaying(true), 100);
+          }
+        }}
+        onSetPlaybackRate={setPlaybackRate}
+      />
     </>
   );
 }

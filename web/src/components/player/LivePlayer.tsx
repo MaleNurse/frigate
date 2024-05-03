@@ -8,11 +8,10 @@ import JSMpegPlayer from "./JSMpegPlayer";
 import { MdCircle } from "react-icons/md";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { useCameraActivity } from "@/hooks/use-camera-activity";
-import { LivePlayerMode } from "@/types/live";
+import { LivePlayerMode, VideoResolutionType } from "@/types/live";
 import useCameraLiveMode from "@/hooks/use-camera-live-mode";
 import { getIconForLabel } from "@/utils/iconUtil";
 import Chip from "../indicators/Chip";
-import { isMobile } from "react-device-detect";
 import { capitalizeFirstLetter } from "@/utils/stringUtil";
 
 type LivePlayerProps = {
@@ -27,6 +26,7 @@ type LivePlayerProps = {
   iOSCompatFullScreen?: boolean;
   pip?: boolean;
   onClick?: () => void;
+  setFullResolution?: React.Dispatch<React.SetStateAction<VideoResolutionType>>;
 };
 
 export default function LivePlayer({
@@ -41,12 +41,11 @@ export default function LivePlayer({
   iOSCompatFullScreen = false,
   pip,
   onClick,
+  setFullResolution,
 }: LivePlayerProps) {
-  const [cameraHovered, setCameraHovered] = useState(false);
-
   // camera activity
 
-  const { activeMotion, activeTracking, activeObjects } =
+  const { activeMotion, activeTracking, objects } =
     useCameraActivity(cameraConfig);
 
   const cameraActive = useMemo(
@@ -123,6 +122,7 @@ export default function LivePlayer({
           audioEnabled={playAudio}
           onPlaying={() => setLiveReady(true)}
           pip={pip}
+          setFullResolution={setFullResolution}
         />
       );
     } else {
@@ -156,25 +156,23 @@ export default function LivePlayer({
           : "outline-0 outline-background"
       } transition-all duration-500 ${className}`}
       onClick={onClick}
-      onMouseEnter={() => setCameraHovered(true)}
-      onMouseLeave={() => setCameraHovered(false)}
     >
       <div className="absolute top-0 inset-x-0 rounded-lg md:rounded-2xl z-10 w-full h-[30%] bg-gradient-to-b from-black/20 to-transparent pointer-events-none"></div>
       <div className="absolute bottom-0 inset-x-0 rounded-lg md:rounded-2xl z-10 w-full h-[10%] bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
       {player}
 
-      {activeObjects.length > 0 && (
+      {objects.length > 0 && (
         <div className="absolute left-0 top-2 z-40">
           <Tooltip>
             <div className="flex">
               <TooltipTrigger asChild>
                 <div className="mx-3 pb-1 text-white text-sm">
                   <Chip
-                    className={`flex items-start justify-between space-x-1 ${cameraHovered || isMobile ? "" : "hidden"} bg-gradient-to-br from-gray-400 to-gray-500 bg-gray-500 z-0`}
+                    className={`flex items-start justify-between space-x-1 bg-gradient-to-br from-gray-400 to-gray-500 bg-gray-500 z-0`}
                   >
                     {[
                       ...new Set([
-                        ...(activeObjects || []).map(({ label }) => label),
+                        ...(objects || []).map(({ label }) => label),
                       ]),
                     ]
                       .map((label) => {
@@ -186,11 +184,7 @@ export default function LivePlayer({
               </TooltipTrigger>
             </div>
             <TooltipContent className="capitalize">
-              {[
-                ...new Set([
-                  ...(activeObjects || []).map(({ label }) => label),
-                ]),
-              ]
+              {[...new Set([...(objects || []).map(({ label }) => label)])]
                 .filter(
                   (label) =>
                     label !== undefined && !label.includes("-verified"),
