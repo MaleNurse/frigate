@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { isSafari } from "react-device-detect";
+import { isMobileOnly, isSafari } from "react-device-detect";
 import { LuPause, LuPlay } from "react-icons/lu";
 import {
   DropdownMenu,
@@ -30,12 +30,14 @@ import {
   AlertDialogTrigger,
 } from "../ui/alert-dialog";
 import { cn } from "@/lib/utils";
+import { FaCompress, FaExpand } from "react-icons/fa";
 
 type VideoControls = {
   volume?: boolean;
   seek?: boolean;
   playbackRate?: boolean;
   plusUpload?: boolean;
+  fullscreen?: boolean;
 };
 
 const CONTROLS_DEFAULT: VideoControls = {
@@ -43,8 +45,10 @@ const CONTROLS_DEFAULT: VideoControls = {
   seek: true,
   playbackRate: true,
   plusUpload: false,
+  fullscreen: false,
 };
 const PLAYBACK_RATE_DEFAULT = isSafari ? [0.5, 1, 2] : [0.5, 1, 2, 4, 8, 16];
+const MIN_ITEMS_WRAP = 6;
 
 type VideoControlsProps = {
   className?: string;
@@ -57,12 +61,14 @@ type VideoControlsProps = {
   playbackRates?: number[];
   playbackRate: number;
   hotKeys?: boolean;
+  fullscreen?: boolean;
   setControlsOpen?: (open: boolean) => void;
   setMuted?: (muted: boolean) => void;
   onPlayPause: (play: boolean) => void;
   onSeek: (diff: number) => void;
   onSetPlaybackRate: (rate: number) => void;
   onUploadFrame?: () => void;
+  setFullscreen?: (full: boolean) => void;
 };
 export default function VideoControls({
   className,
@@ -75,12 +81,14 @@ export default function VideoControls({
   playbackRates = PLAYBACK_RATE_DEFAULT,
   playbackRate,
   hotKeys = true,
+  fullscreen,
   setControlsOpen,
   setMuted,
   onPlayPause,
   onSeek,
   onSetPlaybackRate,
   onUploadFrame,
+  setFullscreen,
 }: VideoControlsProps) {
   const onReplay = useCallback(
     (e: React.MouseEvent<SVGElement>) => {
@@ -163,8 +171,12 @@ export default function VideoControls({
   return (
     <div
       className={cn(
-        "px-4 py-2 flex justify-between items-center gap-8 text-primary z-50 bg-background/60 rounded-lg",
+        "w-auto px-4 py-2 flex sm:flex-nowrap justify-between items-center gap-4 sm:gap-8 text-primary z-50 bg-background/60 rounded-lg",
         className,
+        isMobileOnly &&
+          Object.values(features).filter((feat) => feat).length >
+            MIN_ITEMS_WRAP &&
+          "flex-wrap min-w-[75%]",
       )}
     >
       {video && features.volume && (
@@ -247,6 +259,14 @@ export default function VideoControls({
           }}
           onUploadFrame={onUploadFrame}
         />
+      )}
+      {features.fullscreen && setFullscreen && (
+        <div
+          className="cursor-pointer"
+          onClick={() => setFullscreen(!fullscreen)}
+        >
+          {fullscreen ? <FaCompress /> : <FaExpand />}
+        </div>
       )}
     </div>
   );

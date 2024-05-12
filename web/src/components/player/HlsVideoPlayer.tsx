@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import Hls from "hls.js";
-import { isAndroid, isDesktop, isMobile } from "react-device-detect";
+import { isAndroid, isDesktop, isIOS, isMobile } from "react-device-detect";
 import { TransformComponent, TransformWrapper } from "react-zoom-pan-pinch";
 import VideoControls from "./VideoControls";
 import { VideoResolutionType } from "@/types/live";
@@ -14,6 +14,7 @@ import useSWR from "swr";
 import { FrigateConfig } from "@/types/frigateConfig";
 import { AxiosResponse } from "axios";
 import { toast } from "sonner";
+import { useOverlayState } from "@/hooks/use-overlay-state";
 
 // Android native hls does not seek correctly
 const USE_NATIVE_HLS = !isAndroid;
@@ -28,24 +29,28 @@ type HlsVideoPlayerProps = {
   visible: boolean;
   currentSource: string;
   hotKeys: boolean;
+  fullscreen: boolean;
   onClipEnded?: () => void;
   onPlayerLoaded?: () => void;
   onTimeUpdate?: (time: number) => void;
   onPlaying?: () => void;
   setFullResolution?: React.Dispatch<React.SetStateAction<VideoResolutionType>>;
   onUploadFrame?: (playTime: number) => Promise<AxiosResponse> | undefined;
+  setFullscreen?: (full: boolean) => void;
 };
 export default function HlsVideoPlayer({
   videoRef,
   visible,
   currentSource,
   hotKeys,
+  fullscreen,
   onClipEnded,
   onPlayerLoaded,
   onTimeUpdate,
   onPlaying,
   setFullResolution,
   onUploadFrame,
+  setFullscreen,
 }: HlsVideoPlayerProps) {
   const { data: config } = useSWR<FrigateConfig>("config");
 
@@ -104,8 +109,8 @@ export default function HlsVideoPlayer({
   // controls
 
   const [isPlaying, setIsPlaying] = useState(true);
-  const [muted, setMuted] = useState(true);
-  const [volume, setVolume] = useState(1.0);
+  const [muted, setMuted] = useOverlayState("playerMuted", true);
+  const [volume, setVolume] = useOverlayState("playerVolume", 1.0);
   const [mobileCtrlTimeout, setMobileCtrlTimeout] = useState<NodeJS.Timeout>();
   const [controls, setControls] = useState(isMobile);
   const [controlsOpen, setControlsOpen] = useState(false);
@@ -153,9 +158,10 @@ export default function HlsVideoPlayer({
           seek: true,
           playbackRate: true,
           plusUpload: config?.plus?.enabled == true,
+          fullscreen: !isIOS,
         }}
         setControlsOpen={setControlsOpen}
-        setMuted={setMuted}
+        setMuted={(muted) => setMuted(muted, true)}
         playbackRate={videoRef.current?.playbackRate ?? 1}
         hotKeys={hotKeys}
         onPlayPause={(play) => {
@@ -196,6 +202,8 @@ export default function HlsVideoPlayer({
             }
           }
         }}
+        fullscreen={fullscreen}
+        setFullscreen={setFullscreen}
       />
       <TransformComponent
         wrapperStyle={{
@@ -219,7 +227,9 @@ export default function HlsVideoPlayer({
           controls={false}
           playsInline
           muted={muted}
-          onVolumeChange={() => setVolume(videoRef.current?.volume ?? 1.0)}
+          onVolumeChange={() =>
+            setVolume(videoRef.current?.volume ?? 1.0, true)
+          }
           onPlay={() => {
             setIsPlaying(true);
 
@@ -242,7 +252,13 @@ export default function HlsVideoPlayer({
               : undefined
           }
           onLoadedData={onPlayerLoaded}
-          onLoadedMetadata={handleLoadedMetadata}
+          onLoadedMetadata={() => {
+            handleLoadedMetadata();
+
+            if (videoRef.current && volume) {
+              videoRef.current.volume = volume;
+            }
+          }}
           onEnded={onClipEnded}
           onError={(e) => {
             if (
