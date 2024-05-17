@@ -40,6 +40,33 @@ export default function PreviewPlayer({
 }: PreviewPlayerProps) {
   const [currentHourFrame, setCurrentHourFrame] = useState<string>();
 
+  const currentPreview = useMemo(() => {
+    return cameraPreviews.find(
+      (preview) =>
+        preview.camera == camera &&
+        Math.round(preview.start) >= timeRange.after &&
+        Math.floor(preview.end) <= timeRange.before,
+    );
+  }, [cameraPreviews, camera, timeRange]);
+
+  if (currentPreview) {
+    return (
+      <PreviewVideoPlayer
+        className={className}
+        camera={camera}
+        timeRange={timeRange}
+        cameraPreviews={cameraPreviews}
+        initialPreview={currentPreview}
+        startTime={startTime}
+        isScrubbing={isScrubbing}
+        currentHourFrame={currentHourFrame}
+        onControllerReady={onControllerReady}
+        onClick={onClick}
+        setCurrentHourFrame={setCurrentHourFrame}
+      />
+    );
+  }
+
   if (isCurrentHour(timeRange.before)) {
     return (
       <PreviewFramesPlayer
@@ -55,19 +82,10 @@ export default function PreviewPlayer({
   }
 
   return (
-    <PreviewVideoPlayer
-      className={className}
-      camera={camera}
-      timeRange={timeRange}
-      cameraPreviews={cameraPreviews}
-      startTime={startTime}
-      isScrubbing={isScrubbing}
-      currentHourFrame={currentHourFrame}
-      onControllerReady={onControllerReady}
-      onClick={onClick}
-      setCurrentHourFrame={setCurrentHourFrame}
-    />
-  );
+    <div className="size-full flex items-center justify-center rounded-lg text-white md:rounded-2xl">
+      No Preview Found
+    </div>
+  )
 }
 
 export abstract class PreviewController {
@@ -89,6 +107,7 @@ type PreviewVideoPlayerProps = {
   camera: string;
   timeRange: TimeRange;
   cameraPreviews: Preview[];
+  initialPreview?: Preview;
   startTime?: number;
   isScrubbing: boolean;
   currentHourFrame?: string;
@@ -101,6 +120,7 @@ function PreviewVideoPlayer({
   camera,
   timeRange,
   cameraPreviews,
+  initialPreview,
   startTime,
   isScrubbing,
   currentHourFrame,
@@ -146,18 +166,6 @@ function PreviewVideoPlayer({
   // initial state
 
   const [firstLoad, setFirstLoad] = useState(true);
-
-  const initialPreview = useMemo(() => {
-    return cameraPreviews.find(
-      (preview) =>
-        preview.camera == camera &&
-        Math.round(preview.start) >= timeRange.after &&
-        Math.floor(preview.end) <= timeRange.before,
-    );
-
-    // we only want to calculate this once
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const [currentPreview, setCurrentPreview] = useState(initialPreview);
 
@@ -240,7 +248,7 @@ function PreviewVideoPlayer({
   return (
     <div
       className={cn(
-        "relative rounded-lg md:rounded-2xl w-full flex justify-center bg-black overflow-hidden",
+        "relative flex w-full justify-center overflow-hidden rounded-lg bg-black md:rounded-2xl",
         onClick && "cursor-pointer",
         className,
       )}
@@ -288,11 +296,11 @@ function PreviewVideoPlayer({
         )}
       </video>
       {cameraPreviews && !currentPreview && (
-        <div className="absolute inset-0 text-white rounded-lg md:rounded-2xl flex justify-center items-center">
+        <div className="absolute inset-0 flex items-center justify-center rounded-lg text-white md:rounded-2xl">
           No Preview Found
         </div>
       )}
-      {firstLoad && <Skeleton className="absolute size-full aspect-video" />}
+      {firstLoad && <Skeleton className="absolute aspect-video size-full" />}
     </div>
   );
 }
@@ -482,7 +490,7 @@ function PreviewFramesPlayer({
   return (
     <div
       className={cn(
-        "relative w-full flex justify-center",
+        "relative flex w-full justify-center",
         className,
         onClick && "cursor-pointer",
       )}
@@ -490,15 +498,15 @@ function PreviewFramesPlayer({
     >
       <img
         ref={imgRef}
-        className={`size-full object-contain rounded-lg md:rounded-2xl bg-black`}
+        className={`size-full rounded-lg bg-black object-contain md:rounded-2xl`}
         onLoad={onImageLoaded}
       />
       {previewFrames?.length === 0 && (
-        <div className="absolute inset-x-0 top-1/2 -y-translate-1/2 bg-black text-white rounded-lg md:rounded-2xl align-center text-center">
+        <div className="-y-translate-1/2 align-center absolute inset-x-0 top-1/2 rounded-lg bg-black text-center text-white md:rounded-2xl">
           No Preview Found
         </div>
       )}
-      {firstLoad && <Skeleton className="absolute size-full aspect-video" />}
+      {firstLoad && <Skeleton className="absolute aspect-video size-full" />}
     </div>
   );
 }
