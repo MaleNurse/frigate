@@ -5,7 +5,7 @@ title: Full Reference Config
 
 ### Full configuration reference:
 
-:::warning
+:::caution
 
 It is not recommended to copy this full configuration file. Only specify values that are different from the defaults. Configuration options and default values may change in future versions.
 
@@ -80,7 +80,7 @@ model:
   # Valid values are nhwc or nchw (default: shown below)
   input_tensor: nhwc
   # Optional: Object detection model type, currently only used with the OpenVINO detector
-  # Valid values are ssd, yolox, yolonas (default: shown below)
+  # Valid values are ssd, yolox (default: shown below)
   model_type: ssd
   # Optional: Label name modifications. These are merged into the standard labelmap.
   labelmap:
@@ -159,9 +159,9 @@ birdseye:
 ffmpeg:
   # Optional: global ffmpeg args (default: shown below)
   global_args: -hide_banner -loglevel warning -threads 2
-  # Optional: global hwaccel args (default: auto detect)
+  # Optional: global hwaccel args (default: shown below)
   # NOTE: See hardware acceleration docs for your specific device
-  hwaccel_args: "auto"
+  hwaccel_args: []
   # Optional: global input args (default: shown below)
   input_args: preset-rtsp-generic
   # Optional: global output args
@@ -170,6 +170,8 @@ ffmpeg:
     detect: -threads 2 -f rawvideo -pix_fmt yuv420p
     # Optional: output args for record streams (default: shown below)
     record: preset-record-generic
+    # Optional: output args for rtmp streams (default: shown below)
+    rtmp: preset-rtmp-generic
   # Optional: Time in seconds to wait before ffmpeg retries connecting to the camera. (default: shown below)
   # If set too low, frigate will retry a connection to the camera's stream too frequently, using up the limited streams some cameras can allow at once
   # If set too high, then if a ffmpeg crash or camera stream timeout occurs, you could potentially lose up to a maximum of retry_interval second(s) of footage
@@ -257,28 +259,6 @@ objects:
       # Checks based on the bottom center of the bounding box of the object
       mask: 0,0,1000,0,1000,200,0,200
 
-# Optional: Review configuration
-# NOTE: Can be overridden at the camera level
-review:
-  # Optional: alerts configuration
-  alerts:
-    # Optional: labels that qualify as an alert (default: shown below)
-    labels:
-      - car
-      - person
-    # Optional: required zones for an object to be marked as an alert (default: none)
-    required_zones:
-      - driveway
-  # Optional: detections configuration
-  detections:
-    # Optional: labels that qualify as a detection (default: all labels that are tracked / listened to)
-    labels:
-      - car
-      - person
-    # Optional: required zones for an object to be marked as a detection (default: none)
-    required_zones:
-      - driveway
-
 # Optional: Motion configuration
 # NOTE: Can be overridden at the camera level
 motion:
@@ -353,11 +333,6 @@ record:
     # The -r (framerate) dictates how smooth the output video is.
     # So the args would be -vf setpts=0.02*PTS -r 30 in that case.
     timelapse_args: "-vf setpts=0.04*PTS -r 30"
-  # Optional: Recording Preview Settings
-  preview:
-    # Optional: Quality of recording preview (default: shown below).
-    # Options are: very_low, low, medium, high, very_high
-    quality: medium
   # Optional: Event recording settings
   events:
     # Optional: Number of seconds before the event to include (default: shown below)
@@ -367,6 +342,8 @@ record:
     # Optional: Objects to save recordings for. (default: all tracked objects)
     objects:
       - person
+    # Optional: Restrict recordings to objects that entered any of the listed zones (default: no required zones)
+    required_zones: []
     # Optional: Retention settings for recordings of events
     retain:
       # Required: Default retention days (default: shown below)
@@ -411,6 +388,13 @@ snapshots:
       person: 15
   # Optional: quality of the encoded jpeg, 0-100 (default: shown below)
   quality: 70
+
+# Optional: RTMP configuration
+# NOTE: RTMP is deprecated in favor of restream
+# NOTE: Can be overridden at the camera level
+rtmp:
+  # Optional: Enable the RTMP stream (default: False)
+  enabled: False
 
 # Optional: Restream configuration
 # Uses https://github.com/AlexxIT/go2rtc (v1.8.3)
@@ -468,13 +452,14 @@ cameras:
         # Required: the path to the stream
         # NOTE: path may include environment variables or docker secrets, which must begin with 'FRIGATE_' and be referenced in {}
         - path: rtsp://viewer:{FRIGATE_RTSP_PASSWORD}@10.0.10.10:554/cam/realmonitor?channel=1&subtype=2
-          # Required: list of roles for this stream. valid values are: audio,detect,record
-          # NOTICE: In addition to assigning the audio, detect, and record roles
+          # Required: list of roles for this stream. valid values are: audio,detect,record,rtmp
+          # NOTICE: In addition to assigning the audio, record, and rtmp roles,
           # they must also be enabled in the camera config.
           roles:
             - audio
             - detect
             - record
+            - rtmp
           # Optional: stream specific global args (default: inherit)
           # global_args:
           # Optional: stream specific hwaccel args (default: inherit)
@@ -508,8 +493,6 @@ cameras:
         coordinates: 545,1077,747,939,788,805
         # Optional: Number of consecutive frames required for object to be considered present in the zone (default: shown below).
         inertia: 3
-        # Optional: Number of seconds that an object must loiter to be considered in the zone (default: shown below)
-        loitering_time: 0
         # Optional: List of objects that can trigger this zone (default: all tracked objects)
         objects:
           - person
@@ -607,6 +590,8 @@ ui:
   live_mode: mse
   # Optional: Set a timezone to use in the UI (default: use browser local time)
   # timezone: America/Denver
+  # Optional: Use an experimental recordings / camera view UI (default: shown below)
+  use_experimental: False
   # Optional: Set the time format used.
   # Options are browser, 12hour, or 24hour (default: shown below)
   time_format: browser
@@ -653,19 +638,4 @@ telemetry:
   # Optional: Enable the latest version outbound check (default: shown below)
   # NOTE: If you use the HomeAssistant integration, disabling this will prevent it from reporting new versions
   version_check: True
-
-# Optional: Camera groups (default: no groups are setup)
-# NOTE: It is recommended to use the UI to setup camera groups
-camera_groups:
-  # Required: Name of camera group
-  front:
-    # Required: list of cameras in the group
-    cameras:
-      - front_cam
-      - side_cam
-      - front_doorbell_cam
-    # Required: icon used for group
-    icon: car
-    # Required: index of this group
-    order: 0
 ```
